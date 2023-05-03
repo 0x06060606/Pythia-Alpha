@@ -3,12 +3,23 @@
 <p>Machine Learning Algo for Detecting Bad Network Traffic</p>
 
 ## Internal Usage
-* `sudo python3 cap.py` - Capture UDP and TCP Traffic to json file for Training, Make sure to change the Label accordingly.
-* `python3 model.py` - Train the TCP and UDP Models based on Labeled data collected.
-* `sudo python3 prod.py` - Dry run the Algo on live network traffic of device with scores and external packet dropping.
+* `sudo python3 pythia.py` - Coming Soon.
 
 ## File Map
-* `data_tcp.json` - Labeled Training TCP Traffic Data
-* `data_udp.json` - Labeled Training UDP Traffic Data
-* `model_tcp.pkl` - TCP Trained Model
-* `model_udp.pkl` - UDP Trained Model
+* `pythia.py` - Main file for Pythia.
+* `pythia.conf` - Configuration file for Pythia.
+* `pythia.log` - Log file for Pythia.
+* `models/` - Directory for Pythia's models.
+* `models/tcp.pkl` - Pythia's TCP model.
+* `models/udp.pkl` - Pythia's UDP model.
+* `models/icmp.pkl` - Pythia's ICMP model.
+* `models/other.pkl` - Pythia's Other model.
+* `data/` - Directory for Pythia's training data.
+* `data/tcp.json` - Pythia's TCP training data.
+* `data/udp.json` - Pythia's UDP training data.
+* `data/icmp.json` - Pythia's ICMP training data.
+* `data/other.json` - Pythia's Other training data.
+* `.old/` - Directory for Pythia's old codebase.
+* `.old/prod.py` - Pythia's old Dryrun.
+* `.old/model.py` - Pythia's old Training.
+* `.old/cap.py` - Pythia's old Capturer.
