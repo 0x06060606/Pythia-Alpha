@@ -3,23 +3,27 @@ import hashlib
 from scapy.layers.inet import IP, TCP, UDP
 from scapy.all import *
 
-try:
+try: # Load data from previous runs
     with open("data_tcp.json") as f_in_tcp:
-        tcp_dat = json.load(f_in_tcp)
+        tcp_dat = json.load(f_in_tcp) # Load data from previous runs
 except FileNotFoundError:
-    tcp_dat = []
+    tcp_dat = [] # Create empty lists if no data is found
 try:
     with open("data_udp.json") as f_in_udp:
-        udp_dat = json.load(f_in_udp)
+        udp_dat = json.load(f_in_udp) # Load data from previous runs
 except FileNotFoundError:
-    udp_dat = []
+    udp_dat = [] # Create empty lists if no data is found
 
+# 
 # Normal - Normal Network Activity
 # Remote - Remote Connection Activity
-Status = "Normal"
+# Malicious - Malicious Network Activity
+# Unknown - Unknown Network Activity
+#
+Status = "Normal" # Normal, Remote, Malicious, Unknown
 
 
-def packet_callback(packet):
+def packet_callback(packet): # Packet callback function
     if packet.haslayer(IP):
         ip_src = packet[IP].src
         ip_dst = packet[IP].dst
@@ -40,24 +44,23 @@ def packet_callback(packet):
             else:
                 tx_type = 'UNKNOWN'
             if payload:
-                packet_info = {
-                    "Source IP": ip_src,
-                    "Destination IP": ip_dst,
-                    "Protocol": protocol,
-                    "Type": tx_type,
-                    "Source Port": str(src_port),
-                    "Destination Port": str(dst_port),
-                    "Payload": str(payload),
-                    "Hash": hashlib.md5(payload).hexdigest(),
-                }
+                packet_info = { # Packet information
+                    "Source IP": ip_src, # Source IP
+                    "Destination IP": ip_dst, # Destination IP
+                    "Protocol": protocol, # Protocol
+                    "Type": tx_type, # Type
+                    "Source Port": str(src_port), # Source Port
+                    "Destination Port": str(dst_port), # Destination Port
+                    "Payload": str(payload), # Payload
+                    "Hash": hashlib.md5(payload).hexdigest(), # Hash
+                } 
                 json_output = json.dumps(packet_info)
                 tcp_dat.append({"label": Status, "data": json_output})
-                print(json_output)
+                print(json_output) # Print packet information
                 with open("data_tcp.json", "w") as f:
-                    json.dump(tcp_dat, f)
+                    json.dump(tcp_dat, f) # Write data to file
             else:
-                #print("No TCP payload found in packet.")
-                pass
+                pass # No TCP payload found in packet.
         elif packet.haslayer(UDP):
             src_port = packet[UDP].sport
             dst_port = packet[UDP].dport
@@ -66,28 +69,28 @@ def packet_callback(packet):
             else:
                 payload = bytes(packet[UDP].payload)
             if payload:
-                packet_info = {
-                    "Source IP": ip_src,
-                    "Destination IP": ip_dst,
-                    "Protocol": protocol,
-                    "Type": "UNKNOWN",
-                    "Source Port": str(src_port),
-                    "Destination Port": str(dst_port),
-                    "Payload": str(payload),
-                    "Hash": hashlib.md5(payload).hexdigest(),
-                }
+                packet_info = { # Packet information
+                    "Source IP": ip_src, # Source IP
+                    "Destination IP": ip_dst, # Destination IP
+                    "Protocol": protocol, # Protocol
+                    "Type": "UNKNOWN", # Type
+                    "Source Port": str(src_port), # Source Port
+                    "Destination Port": str(dst_port), # Destination Port
+                    "Payload": str(payload), # Payload
+                    "Hash": hashlib.md5(payload).hexdigest(), # Hash
+                } 
                 json_output = json.dumps(packet_info)
                 udp_dat.append({"label": Status, "data": json_output})
-                print(json_output)
+                print(json_output) # Print packet information
                 with open("data_udp.json", "w") as f:
-                    json.dump(udp_dat, f)
+                    json.dump(udp_dat, f) # Write data to file
             else:
-                #print("No UDP payload found in packet.")
-                pass
+                pass # No UDP payload found in packet.
         else:
-            print("Unknown protocol found in packet.")
+            pass # No TCP or UDP Layer
     else:
-        print("No IP layer found in packet.")
+        pass # No IP Layer
 
-
+# Sniff for TCP and UDP packets
 sniff(prn=packet_callback, filter="ip and (tcp or udp)", store=0)
+# End of File

@@ -25,12 +25,66 @@ def spawn_dataframe(data):
 
 
 def preprocess_data(df: pd.DataFrame):
-    df["Source IP"] = df["Source IP"].apply(lambda x: int(str(int.from_bytes(hashlib.sha256(x.encode('utf-8')).digest(), byteorder='big', signed=False))[:38]))
-    df["Destination IP"] = df["Destination IP"].apply(lambda x: int(str(int.from_bytes(hashlib.sha256(x.encode('utf-8')).digest(), byteorder='big', signed=False))[:38]))
+    df["Source IP"] = df["Source IP"].apply(
+        lambda x: int(
+            str(
+                int.from_bytes(
+                    hashlib.sha256(x.encode("utf-8")).digest(),
+                    byteorder="big",
+                    signed=False,
+                )
+            )[:38]
+        )
+    )
+    df["Destination IP"] = df["Destination IP"].apply(
+        lambda x: int(
+            str(
+                int.from_bytes(
+                    hashlib.sha256(x.encode("utf-8")).digest(),
+                    byteorder="big",
+                    signed=False,
+                )
+            )[:38]
+        )
+    )
     df["Payload_length"] = df["Payload"].apply(len)
-    df["Hash"] = df["Hash"].astype("category").apply(lambda x: int(str(int.from_bytes(hashlib.sha256(x.encode('utf-8')).digest(), byteorder='big', signed=False))[:38]))
-    df["Payload"] = df["Payload"].apply(lambda x: int(str(int.from_bytes(hashlib.sha256(x.encode('utf-8')).digest(), byteorder='big', signed=False))[:38]))
-    df["Type"] = df["Type"].apply(lambda x: int(str(int.from_bytes(hashlib.sha256(x.encode('utf-8')).digest(), byteorder='big', signed=False))[:38]))
+    df["Hash"] = (
+        df["Hash"]
+        .astype("category")
+        .apply(
+            lambda x: int(
+                str(
+                    int.from_bytes(
+                        hashlib.sha256(x.encode("utf-8")).digest(),
+                        byteorder="big",
+                        signed=False,
+                    )
+                )[:38]
+            )
+        )
+    )
+    df["Payload"] = df["Payload"].apply(
+        lambda x: int(
+            str(
+                int.from_bytes(
+                    hashlib.sha256(x.encode("utf-8")).digest(),
+                    byteorder="big",
+                    signed=False,
+                )
+            )[:38]
+        )
+    )
+    df["Type"] = df["Type"].apply(
+        lambda x: int(
+            str(
+                int.from_bytes(
+                    hashlib.sha256(x.encode("utf-8")).digest(),
+                    byteorder="big",
+                    signed=False,
+                )
+            )[:38]
+        )
+    )
     print(df)
     df = pd.get_dummies(df, columns=["Protocol"])
     X = df.drop("label", axis=1)
@@ -48,10 +102,11 @@ def train(X, y):
 
 
 def finish(clf, X_test, y_test, dat_type):
-    joblib.dump(clf, "model_"+dat_type+".pkl")
+    joblib.dump(clf, "model_" + dat_type + ".pkl")
     predictions = clf.predict(X_test)
     accuracy = accuracy_score(y_test, predictions)
-    print(dat_type+" Accuracy: ", accuracy)
+    print(dat_type + " Accuracy: ", accuracy)
+
 
 def start(json_file, data_type):
     with open(json_file) as f_in:
@@ -60,5 +115,6 @@ def start(json_file, data_type):
         clf, X_test, y_test = train(X, y)
         finish(clf, X_test, y_test, data_type)
 
-start('data_tcp.json','tcp')
-start('data_udp.json','udp')
+
+start("data_tcp.json", "tcp")
+start("data_udp.json", "udp")
