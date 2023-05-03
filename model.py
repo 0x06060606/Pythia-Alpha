@@ -1,7 +1,19 @@
-def spawn_dataframe(data):
-    import json
-    import pandas as pd
+import joblib
+import json
+import hashlib
+from scapy.layers.inet import IP, TCP, UDP
+from scapy.all import *
+import numpy as np
+import subprocess
+import struct
+import ipaddress
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
 
+
+def spawn_dataframe(data):
     formatted_data = []
     data = json.load(data)
     for entry in data:
@@ -12,11 +24,7 @@ def spawn_dataframe(data):
     return df
 
 
-def preprocess_data(df):
-    import pandas as pd
-    import hashlib
-    import struct
-
+def preprocess_data(df: pd.DataFrame):
     df["Source IP"] = df["Source IP"].apply(lambda x: int(str(int.from_bytes(hashlib.sha256(x.encode('utf-8')).digest(), byteorder='big', signed=False))[:38]))
     df["Destination IP"] = df["Destination IP"].apply(lambda x: int(str(int.from_bytes(hashlib.sha256(x.encode('utf-8')).digest(), byteorder='big', signed=False))[:38]))
     df["Payload_length"] = df["Payload"].apply(len)
@@ -31,9 +39,6 @@ def preprocess_data(df):
 
 
 def train(X, y):
-    from sklearn.model_selection import train_test_split
-    from sklearn.ensemble import RandomForestClassifier
-
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=42
     )
@@ -43,12 +48,8 @@ def train(X, y):
 
 
 def finish(clf, X_test, y_test, dat_type):
-    import joblib
-
     joblib.dump(clf, "model_"+dat_type+".pkl")
     predictions = clf.predict(X_test)
-    from sklearn.metrics import accuracy_score
-
     accuracy = accuracy_score(y_test, predictions)
     print(dat_type+" Accuracy: ", accuracy)
 
