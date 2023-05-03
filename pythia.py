@@ -14,12 +14,23 @@ from sklearn.metrics import accuracy_score, confusion_matrix, classification_rep
 
 
 # TODO: Add more features to the model.
+
+
 class Pythia:  # The Oracle of Delphi
     def __init__(self):
         self.Labels = [
-            "Normal Traffic",
-            "Remote Connection Traffic",
-        ]  # 0 = Normal, 1 = Remote Connection
+            "Normal",
+            "Remote",
+            "Malicious",
+            "Unknown",
+        ]  # 0 = Normal, 1 = Remote, 2 = Malicious, 3 = Unknown
+        #
+        # Normal - Normal Network Activity
+        # Remote - Remote Connection Activity
+        # Malicious - Malicious Network Activity
+        # Unknown - Unknown Network Activity
+        #
+        self.Status = "Normal"  # Default status is Normal.
 
     def is_local_ip(self, ip: str):
         return ipaddress.ip_address(
@@ -48,6 +59,26 @@ class Pythia:  # The Oracle of Delphi
             )
         )  # Hash data using SHA256 and return the first 38 digits of the hash.
 
+    def repair_json(self, file_name):  # Repair JSON file.
+        with open(file_name, "r") as f:
+            lines = f.readlines()
+        repaired_lines = []
+        for line in lines:
+            try:
+                repaired_lines.append(json.loads(line))
+            except json.JSONDecodeError:
+                line = line.strip()
+                if not line.startswith("{"):
+                    line = "{" + line
+                if not line.endswith("}"):
+                    line = line + "}"
+                line = line.replace("'", '"')
+                try:
+                    repaired_lines.append(json.loads(line))
+                except json.JSONDecodeError:
+                    print(f" [!] Could not repair line: {line}")
+        return repaired_lines # Return repaired JSON file.
+
     def preprocess_data(self, df: pd.DataFrame):  # Preprocess data for model.
         df["Payload_length"] = df["Payload"].apply(len)
         df["Source IP"] = self.hash_data(df["Source IP"])
@@ -58,8 +89,12 @@ class Pythia:  # The Oracle of Delphi
         df["Protocol"] = df["Protocol"].astype("category").cat.codes
         print(df)
         df = pd.get_dummies(df, columns=["Protocol"])
-        X = df.drop("label", axis=1)
-        Y = df["label"]
+        try:
+            X = df.drop("label", axis=1)
+            Y = df["label"]
+        except KeyError:
+            X = df
+            Y = None
         return (df, X, Y)  # Return preprocessed data, X, and Y.
 
     def predict_score(
@@ -104,12 +139,15 @@ class Pythia:  # The Oracle of Delphi
                         "Payload": str(payload),
                         "Hash": hashlib.md5(payload).hexdigest(),
                     }
-                    # json_output = json.dumps(packet_info)
-                    # print(json_output)
+                    json_output = json.dumps(packet_info)
+                    self.TCPData.append({"label": self.Status, "data": json_output})
+                    print(json_output)
+                    with open("data/tcp.json", "w") as f:
+                        json.dump(self.TCPData, f)
                     score = self.predict_score(packet_info, "tcp")
                     print("TCP Data Score:", score)
                     max_index = np.argmax(score[0])
-                    print(self.defines[max_index])
+                    print(self.Labels[max_index])
                     if max_index == 1:
                         print(ip_src)
                         if self.is_local_ip(ip_src):
@@ -136,12 +174,15 @@ class Pythia:  # The Oracle of Delphi
                         "Payload": str(payload),
                         "Hash": hashlib.md5(payload).hexdigest(),
                     }
-                    # json_output = json.dumps(packet_info)
-                    # print(json_output)
+                    json_output = json.dumps(packet_info)
+                    self.UDPData.append({"label": self.Status, "data": json_output})
+                    print(json_output)
+                    with open("data/udp.json", "w") as f:
+                        json.dump(self.UDPData, f)
                     score = self.predict_score(packet_info, "udp")
                     print("UDP Data Score:", score)
                     max_index = np.argmax(score[0])
-                    print(self.defines[max_index])
+                    print(self.Labels[max_index])
                     if max_index == 1:
                         print(ip_src)
                         if self.is_local_ip(ip_src):
@@ -155,7 +196,8 @@ class Pythia:  # The Oracle of Delphi
         else:
             pass  # No IP layer found in packet.
 
-    def start_sniff(self):  # Start sniffing packets.
+    def start_sniff(self, Status: str):  # Start sniffing packets.
+        self.Status = Status
         print(" [#] Starting Pythia Sniffer...")
         sniff(
             prn=self.packet_callback, filter="ip and (tcp or udp)", store=0
@@ -190,7 +232,7 @@ class Pythia:  # The Oracle of Delphi
         )  # Print confusion matrix.
         print(
             dat_type + " Classification Report: ",
-            classification_report(y_test, predictions),
+            classification_report(y_test, predictions, zero_division=1),
         )  # Print classification report.
         return accuracy  # Return accuracy.
 
@@ -200,3 +242,42 @@ class Pythia:  # The Oracle of Delphi
             df, X, y = self.preprocess_data(df)  # Preprocess data.
             clf, X_test, y_test = self.train_model(X, y)  # Train model.
             return self.finish_model(clf, X_test, y_test, data_type)  # Finish model.
+
+    def load_prev_data(self, data_type: str):  # Load previous data.
+        try:
+            with open("data/" + data_type + ".json") as f_in:
+                return json.load(f_in)
+        except FileNotFoundError:
+            return []
+
+
+if __name__ == "__main__":
+    if os.geteuid() != 0:  # Check if user is root.
+        print(" [!] Please run as root.")
+        sys.exit(1)
+    if not os.path.exists("models"):  # Create models directory if it doesn't exist.
+        os.makedirs("models")
+    if not os.path.exists("data"):  # Create data directory if it doesn't exist.
+        os.makedirs("data")
+    if len(sys.argv) > 1:  # Check if argument is provided.
+        Pythia.TCPData = Pythia().load_prev_data("tcp")  # Load previous TCP data.
+        Pythia.UDPData = Pythia().load_prev_data("udp")  # Load previous UDP data.
+        if sys.argv[1] == "train":
+            Pythia().start_model("tcp")  # Train TCP model.
+            Pythia().start_model("udp")  # Train UDP model.
+        elif sys.argv[1] == "sniff":
+            try:
+                _ = sys.argv[2]  # Check if interface is provided.
+                Pythia().start_sniff(sys.argv[2])  # Start sniffing packets.
+            except IndexError:  # If no interface is provided.
+                print(" [!] Invalid argument.")
+                sys.exit(1)
+            else:
+                print(" [!] Invalid argument.")
+                sys.exit(1)
+        else:
+            print(" [!] Invalid argument.")
+            sys.exit(1)
+    else:
+        print(" [!] Invalid argument.")
+        sys.exit(1)
