@@ -7,6 +7,7 @@ import numpy as np
 import subprocess
 import struct
 import ipaddress
+import dirtyjson
 import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
@@ -20,17 +21,18 @@ class Pythia:  # The Oracle of Delphi
     def __init__(self):
         self.Labels = [
             "Normal",
-            "Remote",
+            "VNC",
             "Malicious",
             "Unknown",
-        ]  # 0 = Normal, 1 = Remote, 2 = Malicious, 3 = Unknown
+        ]  # 0 = Normal, 1 = VNC, 2 = Malicious, 3 = Unknown
         #
         # Normal - Normal Network Activity
-        # Remote - Remote Connection Activity
+        # VNC - VNC Connection Activity
         # Malicious - Malicious Network Activity
         # Unknown - Unknown Network Activity
         #
         self.Status = "Normal"  # Default status is Normal.
+        self.mode = 0  # Default mode is 0 (collecting data).
 
     def is_local_ip(self, ip: str):
         return ipaddress.ip_address(
@@ -46,6 +48,14 @@ class Pythia:  # The Oracle of Delphi
         except subprocess.CalledProcessError:
             print(f" [@] Failed to block IP: {ip}")
 
+    def clear_iptables(self):  # Clear iptables rules.
+        try:
+            # subprocess.run(["sudo", "iptables", "-F"], check=True)
+            subprocess.run(["sudo", "iptables", "-X"], check=True)
+            print(" [#] Successfully cleared iptables rules")
+        except subprocess.CalledProcessError:
+            print(" [!] Failed to clear iptables rules")
+
     def hash_data(self, df: pd.DataFrame):
         return df.apply(
             lambda x: int(
@@ -59,25 +69,20 @@ class Pythia:  # The Oracle of Delphi
             )
         )  # Hash data using SHA256 and return the first 38 digits of the hash.
 
-    def repair_json(self, file_name):  # Repair JSON file.
-        with open(file_name, "r") as f:
-            lines = f.readlines()
-        repaired_lines = []
-        for line in lines:
-            try:
-                repaired_lines.append(json.loads(line))
-            except json.JSONDecodeError:
-                line = line.strip()
-                if not line.startswith("{"):
-                    line = "{" + line
-                if not line.endswith("}"):
-                    line = line + "}"
-                line = line.replace("'", '"')
-                try:
-                    repaired_lines.append(json.loads(line))
-                except json.JSONDecodeError:
-                    print(f" [!] Could not repair line: {line}")
-        return repaired_lines # Return repaired JSON file.
+    def repair_json(self):  # Repair JSON files in data directory.
+        for file in os.listdir("data"):
+            if file.endswith(".json"):
+                with open("data/" + file, "r") as f:
+                    data = f.read()
+                    try:
+                        repaired_json = dirtyjson.loads(data)
+                    except Exception as e:
+                        if "Expecting ',' delimiter or '}'" in str(e):
+                            repaired_json = dirtyjson.loads(data + "}]")
+                        else:
+                            input(f" [!] Error: {e}")
+                    with open("data/" + file, "w") as f:
+                        json.dump(repaired_json, f)  # Write repaired JSON to file.
 
     def preprocess_data(self, df: pd.DataFrame):  # Preprocess data for model.
         df["Payload_length"] = df["Payload"].apply(len)
@@ -86,7 +91,7 @@ class Pythia:  # The Oracle of Delphi
         df["Hash"] = self.hash_data(df["Hash"])
         df["Payload"] = self.hash_data(df["Payload"])
         df["Type"] = df["Type"].astype("category").cat.codes
-        df["Protocol"] = df["Protocol"].astype("category").cat.codes
+        # df["Protocol"] = df["Protocol"].astype("category").cat.codes # TODO: Fix this.
         print(df)
         df = pd.get_dummies(df, columns=["Protocol"])
         try:
@@ -112,7 +117,7 @@ class Pythia:  # The Oracle of Delphi
         if packet.haslayer(IP):
             ip_src = packet[IP].src
             ip_dst = packet[IP].dst
-            protocol = packet[IP].proto
+            protocol = str(packet[IP].proto)
             if packet.haslayer(TCP):
                 src_port = packet[TCP].sport
                 dst_port = packet[TCP].dport
@@ -139,21 +144,24 @@ class Pythia:  # The Oracle of Delphi
                         "Payload": str(payload),
                         "Hash": hashlib.md5(payload).hexdigest(),
                     }
-                    json_output = json.dumps(packet_info)
-                    self.TCPData.append({"label": self.Status, "data": json_output})
-                    print(json_output)
-                    with open("data/tcp.json", "w") as f:
-                        json.dump(self.TCPData, f)
-                    score = self.predict_score(packet_info, "tcp")
-                    print("TCP Data Score:", score)
-                    max_index = np.argmax(score[0])
-                    print(self.Labels[max_index])
-                    if max_index == 1:
-                        print(ip_src)
-                        if self.is_local_ip(ip_src):
-                            pass  # Do nothing
-                        else:
-                            self.block_ip(ip_src)
+                    if self.mode == 0:
+                        json_output = json.dumps(packet_info)
+                        self.TCPData.append({"label": self.Status, "data": json_output})
+                        print(json_output)
+                        with open("data/tcp.json", "w") as f:
+                            json.dump(self.TCPData, f)
+                    elif self.mode == 1:
+                        score = self.predict_score(packet_info, "tcp")
+                        print("TCP Data Score:", score)
+                        max_index = np.argmax(score[0])
+                        print("Max Index:", max_index)
+                        print(self.Labels[max_index])
+                        if max_index == 1:
+                            print(ip_src)
+                            if self.is_local_ip(ip_src):
+                                pass  # Do nothing
+                            else:
+                                self.block_ip(ip_src)
                 else:
                     pass  # No TCP payload found in packet.
             elif packet.haslayer(UDP):
@@ -174,21 +182,24 @@ class Pythia:  # The Oracle of Delphi
                         "Payload": str(payload),
                         "Hash": hashlib.md5(payload).hexdigest(),
                     }
-                    json_output = json.dumps(packet_info)
-                    self.UDPData.append({"label": self.Status, "data": json_output})
-                    print(json_output)
-                    with open("data/udp.json", "w") as f:
-                        json.dump(self.UDPData, f)
-                    score = self.predict_score(packet_info, "udp")
-                    print("UDP Data Score:", score)
-                    max_index = np.argmax(score[0])
-                    print(self.Labels[max_index])
-                    if max_index == 1:
-                        print(ip_src)
-                        if self.is_local_ip(ip_src):
-                            pass  # Do nothing
-                        else:
-                            self.block_ip(ip_src)
+                    if self.mode == 0:
+                        json_output = json.dumps(packet_info)
+                        self.UDPData.append({"label": self.Status, "data": json_output})
+                        print(json_output)
+                        with open("data/udp.json", "w") as f:
+                            json.dump(self.UDPData, f)
+                    elif self.mode == 1:
+                        score = self.predict_score(packet_info, "udp")
+                        print("UDP Data Score:", score)
+                        max_index = np.argmax(score[0])
+                        print("Max Index:", max_index)
+                        print(self.Labels[max_index])
+                        if max_index == 1:
+                            print(ip_src)
+                            if self.is_local_ip(ip_src):
+                                pass  # Do nothing
+                            else:
+                                self.block_ip(ip_src)
                 else:
                     pass  # No UDP payload found in packet.
             else:
@@ -196,8 +207,9 @@ class Pythia:  # The Oracle of Delphi
         else:
             pass  # No IP layer found in packet.
 
-    def start_sniff(self, Status: str):  # Start sniffing packets.
+    def start_sniff(self, Status: str, mode: int = 0):  # Start sniffing packets.
         self.Status = Status
+        self.mode = mode
         print(" [#] Starting Pythia Sniffer...")
         sniff(
             prn=self.packet_callback, filter="ip and (tcp or udp)", store=0
@@ -259,6 +271,7 @@ if __name__ == "__main__":
         os.makedirs("models")
     if not os.path.exists("data"):  # Create data directory if it doesn't exist.
         os.makedirs("data")
+    Pythia().repair_json()  # Repair JSON files before starting program to prevent errors.
     if len(sys.argv) > 1:  # Check if argument is provided.
         Pythia.TCPData = Pythia().load_prev_data("tcp")  # Load previous TCP data.
         Pythia.UDPData = Pythia().load_prev_data("udp")  # Load previous UDP data.
@@ -268,16 +281,32 @@ if __name__ == "__main__":
         elif sys.argv[1] == "sniff":
             try:
                 _ = sys.argv[2]  # Check if interface is provided.
-                Pythia().start_sniff(sys.argv[2])  # Start sniffing packets.
+                Pythia().start_sniff(sys.argv[2], 0)  # Start sniffing packets.
             except IndexError:  # If no interface is provided.
-                print(" [!] Invalid argument.")
+                print(" [!] Invalid argument. 1")  # If no argument is provided.
                 sys.exit(1)
-            else:
-                print(" [!] Invalid argument.")
+            else:  # If user presses CTRL+C.
+                print("\n [!] Stopping Pythia Sniffer...")
+                Pythia().repair_json()  # Repair JSON files before exiting.
+                sys.exit(0)
+        elif sys.argv[1] == "run":
+            Pythia().start_sniff("run", 1)  # Start Monitoring packets.
+        elif sys.argv[1] == "block":
+            try:
+                _ = sys.argv[2]  # Check if IP address is provided.
+                Pythia().block_ip(sys.argv[2])  # Block IP address.
+                print(" [#] Blocked IP address: " + sys.argv[2])
+                sys.exit(0)
+            except IndexError:
+                print(" [!] Invalid argument. 2")
                 sys.exit(1)
+        elif sys.argv[1] == "clear":
+            Pythia().clear_iptables() # Clear iptables.
+            print(" [#] Cleared iptables.")
+            sys.exit(0)
         else:
-            print(" [!] Invalid argument.")
+            print(" [!] Invalid argument. 3")  # If invalid argument is provided.
             sys.exit(1)
     else:
-        print(" [!] Invalid argument.")
+        print(" [!] Invalid argument. 4")  # If no argument is provided.
         sys.exit(1)
