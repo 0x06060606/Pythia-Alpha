@@ -3,7 +3,7 @@
 <p>Machine Learning Algo for Detecting Bad Network Traffic</p>
 
 ## Internal Usage
-* `sudo python3 pythia.py` - Coming Soon.
+* `sudo python3 pythia.py help` - Display Pythia help message.
 
 ## File Map
 * `pythia.py` - Main file for Pythia.
