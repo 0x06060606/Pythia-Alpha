@@ -267,46 +267,58 @@ if __name__ == "__main__":
     if os.geteuid() != 0:  # Check if user is root.
         print(" [!] Please run as root.")
         sys.exit(1)
+    else:
+        print(" [#] Starting Pythia...") # Print startup message.
     if not os.path.exists("models"):  # Create models directory if it doesn't exist.
         os.makedirs("models")
     if not os.path.exists("data"):  # Create data directory if it doesn't exist.
         os.makedirs("data")
     Pythia().repair_json()  # Repair JSON files before starting program to prevent errors.
+    print(" [#] Pythia Engine Started.")
     if len(sys.argv) > 1:  # Check if argument is provided.
         Pythia.TCPData = Pythia().load_prev_data("tcp")  # Load previous TCP data.
         Pythia.UDPData = Pythia().load_prev_data("udp")  # Load previous UDP data.
-        if sys.argv[1] == "train":
+        if sys.argv[1] == "train": # If train argument is provided.
             Pythia().start_model("tcp")  # Train TCP model.
             Pythia().start_model("udp")  # Train UDP model.
-        elif sys.argv[1] == "sniff":
+        elif sys.argv[1] == "sniff": # If sniff argument is provided.
             try:
                 _ = sys.argv[2]  # Check if interface is provided.
                 Pythia().start_sniff(sys.argv[2], 0)  # Start sniffing packets.
             except IndexError:  # If no interface is provided.
-                print(" [!] Invalid argument. 1")  # If no argument is provided.
+                print(" [!] No training keyword.")  # If no argument is provided.
                 sys.exit(1)
             else:  # If user presses CTRL+C.
-                print("\n [!] Stopping Pythia Sniffer...")
+                print("\n [!] Stopping Pythia...") # Stop sniffing packets.
                 Pythia().repair_json()  # Repair JSON files before exiting.
                 sys.exit(0)
-        elif sys.argv[1] == "run":
+        elif sys.argv[1] == "run": # If run argument is provided.
             Pythia().start_sniff("run", 1)  # Start Monitoring packets.
-        elif sys.argv[1] == "block":
+        elif sys.argv[1] == "block": # If block argument is provided.
             try:
                 _ = sys.argv[2]  # Check if IP address is provided.
                 Pythia().block_ip(sys.argv[2])  # Block IP address.
                 print(" [#] Blocked IP address: " + sys.argv[2])
                 sys.exit(0)
             except IndexError:
-                print(" [!] Invalid argument. 2")
+                print(" [!] Invalid. Missing IP address.") # If no IP address is provided.
                 sys.exit(1)
-        elif sys.argv[1] == "clear":
+        elif sys.argv[1] == "clear": # If clear argument is provided.
+            print(" [#] Clearing iptables...")
             Pythia().clear_iptables() # Clear iptables.
-            print(" [#] Cleared iptables.")
+            sys.exit(0)
+        elif sys.argv[1] == "help": # If help argument is provided.
+            print(" [#] Usage: python3 pythia.py [train|sniff|run|block|clear|help]")
+            print(" [#]   train: Train Pythia models.")
+            print(" [#]   sniff <class>: Sniff packets and classify them.")
+            print(" [#]   run: Run Pythia in the background.")
+            print(" [#]   block <ip>: Block IP address.")
+            print(" [#]   clear: Clear iptables.")
+            print(" [#]   help: Print this help message.")
             sys.exit(0)
         else:
-            print(" [!] Invalid argument. 3")  # If invalid argument is provided.
+            print(" [!] Invalid argument. Run help for a list of valid commands.")  # If invalid argument is provided.
             sys.exit(1)
     else:
-        print(" [!] Invalid argument. 4")  # If no argument is provided.
+        print(" [!] No argument. Run help for a list of valid commands.")  # If no argument is provided.
         sys.exit(1)
