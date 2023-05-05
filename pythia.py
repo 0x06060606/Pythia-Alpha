@@ -79,8 +79,12 @@ class Pythia:  # The Oracle of Delphi
                     except Exception as e:
                         if "Expecting ',' delimiter or '}'" in str(e):
                             repaired_json = dirtyjson.loads(data + "}]")
+                        elif "Expecting value: line 1 column 1 (char 0)" in str(e):
+                            print(f" [!] {file} was corrupted and will be deleted.")
+                            repaired_json = dirtyjson.loads("[{" + data + "}]")
                         else:
-                            input(f" [!] Error: {e}")
+                            print(f" [!] {file} Error: {e}")
+                            sys.exit(1)
                     with open("data/" + file, "w") as f:
                         json.dump(repaired_json, f)  # Write repaired JSON to file.
 
